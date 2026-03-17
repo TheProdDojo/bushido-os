@@ -648,13 +648,62 @@
         <div class="waitlist-card">
             <h3 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.5rem;">Pro & Team tiers coming soon</h3>
             <p style="color: var(--text-secondary); font-size: 0.95rem;">Hosted API, cloud sync, shared workspaces, and team features. Join the waitlist to be first in line.</p>
-            <form class="waitlist-form" onsubmit="event.preventDefault(); this.querySelector('button').textContent = '✓ You\'re in!'; this.querySelector('button').style.background = 'var(--accent-green)'; this.querySelector('button').style.color = '#000';">
-                <input type="email" placeholder="you@company.com" required>
-                <button type="submit">Join Waitlist</button>
+            <form class="waitlist-form" id="waitlist-form">
+                <input type="email" id="waitlist-email" placeholder="you@company.com" required>
+                <button type="submit" id="waitlist-btn">Join Waitlist</button>
             </form>
-            <p class="waitlist-note">No spam. We'll only email when Pro launches.</p>
+            <p class="waitlist-note" id="waitlist-msg">No spam. We'll only email when Pro launches.</p>
         </div>
     </section>
+
+    <script>
+        // Supabase waitlist integration
+        const SUPABASE_URL = 'https://jisbboumbunpzwicmgxo.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imppc2Jib3VtYnVucHp3aWNtZ3hvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwMTcyODQsImV4cCI6MjA4MzU5MzI4NH0.4PCW-ZQ6q3hoDYSic_7HOma41eqzDVqWaOgLzu_HJHk';
+
+        document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('waitlist-btn');
+            const msg = document.getElementById('waitlist-msg');
+            const email = document.getElementById('waitlist-email').value.trim();
+
+            btn.textContent = 'Joining...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/waitlist`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify({ email, source: 'landing_page' })
+                });
+
+                if (res.ok) {
+                    btn.textContent = '✓ You\'re in!';
+                    btn.style.background = 'var(--accent-green)';
+                    btn.style.color = '#000';
+                    msg.textContent = 'We\'ll let you know when Pro launches.';
+                    msg.style.color = 'var(--accent-green)';
+                } else if (res.status === 409) {
+                    btn.textContent = '✓ Already signed up!';
+                    btn.style.background = 'var(--accent-amber)';
+                    btn.style.color = '#000';
+                    msg.textContent = 'You\'re already on the list.';
+                } else {
+                    throw new Error(`${res.status}`);
+                }
+            } catch (err) {
+                btn.textContent = 'Join Waitlist';
+                btn.disabled = false;
+                msg.textContent = 'Something went wrong. Please try again.';
+                msg.style.color = 'var(--accent-red)';
+            }
+        });
+    </script>
 
     <hr class="divider">
 
