@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+dist/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Build
+*.tsbuildinfo
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.cursor/
+.windsurf/
+
+# Project artifacts (user-specific)
+.bushido/
+
+# Deployment
+.vercel/
+
+# Test
+coverage/

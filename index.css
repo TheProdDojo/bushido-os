@@ -1,0 +1,381 @@
+/* BushidoOS - The Way of the Warrior Founder */
+/* A unique identity inspired by Japanese aesthetics and samurai discipline */
+
+/* ====== CSS Variables ====== */
+:root {
+  /* Core Palette - Inspired by traditional Japanese colors */
+  --bushido-ink: #0d0d12;
+  /* Sumi ink black */
+  --bushido-charcoal: #1a1a22;
+  /* Deep charcoal */
+  --bushido-slate: #2a2a36;
+  /* Warm slate */
+
+  /* Accent Colors */
+  --bushido-red: #E63946;
+  /* Samurai Red - Primary Brand */
+  --bushido-gold: #c3a167;
+  /* Muted Gold - Secondary/Legacy */
+
+  --bushido-brand: var(--bushido-red);
+
+  --bushido-indigo: #4a5899;
+  /* Ai (indigo) - depth, loyalty */
+  --bushido-jade: #2d8a6e;
+  /* Jade green - growth, balance */
+  --bushido-cream: #f5f0e6;
+  /* Kinari (natural cream) */
+
+  /* Text Colors */
+  --text-primary: #f5f0e6;
+  /* Cream white */
+  --text-secondary: #a8a4a0;
+  /* Warm gray */
+  --text-muted: #6b6762;
+  /* Muted earth */
+
+  /* Gradients */
+  --gradient-gold: linear-gradient(135deg, #E63946 0%, #D32F2F 50%, #B71C1C 100%);
+  --gradient-ember: linear-gradient(135deg, #E63946 0%, #8b2525 100%);
+  --gradient-hero: linear-gradient(180deg,
+      rgba(230, 57, 70, 0.08) 0%,
+      rgba(191, 58, 58, 0.05) 50%,
+      transparent 100%);
+
+  /* Borders & Shadows */
+  --border-subtle: rgba(230, 57, 70, 0.1);
+  --border-default: rgba(230, 57, 70, 0.2);
+  --shadow-warm: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 60px rgba(230, 57, 70, 0.1);
+}
+
+/* ====== Base Styles ====== */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bushido-ink);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ====== Subtle Background Pattern - Seigaiha Wave ====== */
+.background-pattern {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='50'%3E%3Cpath d='M0 25 Q25 0, 50 25 Q75 50, 100 25' fill='none' stroke='%23d4a853' stroke-width='1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* ====== Hero Ambient Glow ====== */
+.hero-glow {
+  position: fixed;
+  top: -20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 600px;
+  background: radial-gradient(ellipse, rgba(212, 168, 83, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ====== Glass Card Styles ====== */
+.glass-card {
+  background: rgba(26, 26, 34, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  box-shadow: var(--shadow-warm);
+}
+
+.glass-card-hover:hover {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-glow), var(--shadow-warm);
+}
+
+/* ====== Input Styles ====== */
+.input-dark {
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  outline: none;
+  width: 100%;
+  resize: none;
+}
+
+.input-dark::placeholder {
+  color: var(--text-muted);
+}
+
+/* ====== Button Styles ====== */
+.btn-primary {
+  background: var(--gradient-gold);
+  color: var(--bushido-ink);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(212, 168, 83, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-send {
+  background: var(--gradient-gold);
+  color: var(--bushido-ink);
+  border: none;
+  border-radius: 50%;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-send:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(212, 168, 83, 0.4);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+  color: var(--bushido-gold);
+  background: rgba(212, 168, 83, 0.1);
+}
+
+.btn-oauth {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bushido-slate);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-oauth:hover {
+  background: var(--bushido-charcoal);
+  border-color: var(--bushido-gold);
+}
+
+/* ====== Badge Styles ====== */
+.badge-discipline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(212, 168, 83, 0.1);
+  border: 1px solid rgba(212, 168, 83, 0.2);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bushido-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ====== Gradient Text ====== */
+.text-gradient {
+  background: var(--gradient-gold);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-ember {
+  background: var(--gradient-ember);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ====== Recording Indicator ====== */
+.recording-pulse {
+  animation: recordingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes recordingPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    color: var(--bushido-red);
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ====== Modal Backdrop ====== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 13, 18, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ====== Scrollbar Styles ====== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bushido-slate);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ====== Selection ====== */
+::selection {
+  background: rgba(212, 168, 83, 0.3);
+  color: var(--text-primary);
+}
+
+/* ====== Divider with Kanji flair ====== */
+.divider-zen {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.divider-zen::before,
+.divider-zen::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-default), transparent);
+}
+
+/* ====== Focus rings ====== */
+/* Focus ring removed per user preference */
+/* *:focus-visible handled by individual components or browser default */
+
+/* ====== Typography ====== */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+p {
+  color: var(--text-secondary);
+}
+
+a {
+  color: var(--bushido-gold);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* ====== Progress bar ====== */
+.progress-bar {
+  background: var(--bushido-slate);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--gradient-gold);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* ====== Card hover lift ====== */
+.card-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* ====== Modal Animations ====== */
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

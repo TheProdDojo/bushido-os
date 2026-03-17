@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BushidoOS — The Enforcement Layer Between Intent and Execution</title>
+    <meta name="description" content="BushidoOS is an AI Product Manager that ensures what gets built matches what was specified. Living PRD, real-time audit, impact cascade. IDE-native.">
+    <meta name="keywords" content="AI PM, development orchestrator, spec management, code audit, IDE, MCP, product management">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #08080c;
+            --bg-surface: #0f0f16;
+            --bg-surface-2: #161620;
+            --bg-surface-3: #1c1c2a;
+            --text-primary: #f0ece4;
+            --text-secondary: #9b97a0;
+            --text-dim: #5c586a;
+            --accent-red: #e63946;
+            --accent-amber: #f2a93b;
+            --accent-gold: #d4a154;
+            --accent-green: #39e67a;
+            --border: rgba(255, 255, 255, 0.06);
+            --border-hover: rgba(255, 255, 255, 0.12);
+            --glow-red: rgba(230, 57, 70, 0.15);
+            --glow-amber: rgba(242, 169, 59, 0.1);
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* ─── NAV ─────────────────── */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            padding: 1rem 2rem;
+            backdrop-filter: blur(20px);
+            background: rgba(8, 8, 12, 0.8);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .nav-brand {
+            display: flex; align-items: center; gap: 0.75rem;
+            font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em;
+            text-decoration: none; color: var(--text-primary);
+        }
+        .nav-torii {
+            font-size: 1.4rem;
+            filter: drop-shadow(0 0 6px var(--accent-red));
+        }
+        .nav-links { display: flex; align-items: center; gap: 2rem; }
+        .nav-links a {
+            color: var(--text-secondary); text-decoration: none;
+            font-size: 0.9rem; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover { color: var(--text-primary); }
+        .nav-cta {
+            background: var(--accent-red) !important; color: #fff !important;
+            padding: 0.5rem 1.25rem; border-radius: 8px;
+            font-weight: 600; font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .nav-cta:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+        /* ─── HERO ────────────────── */
+        .hero {
+            min-height: 100vh; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            text-align: center; padding: 8rem 2rem 6rem;
+            position: relative;
+        }
+        .hero::before {
+            content: '';
+            position: absolute; top: -20%; left: 50%; transform: translateX(-50%);
+            width: 800px; height: 600px;
+            background: radial-gradient(ellipse, var(--glow-red) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.4rem 1rem; border-radius: 100px;
+            border: 1px solid var(--border-hover);
+            background: var(--bg-surface);
+            font-size: 0.8rem; color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+        .hero-badge span { color: var(--accent-amber); font-weight: 600; }
+        .hero h1 {
+            font-size: clamp(2.8rem, 7vw, 5rem);
+            font-weight: 900; line-height: 1.05;
+            letter-spacing: -0.04em;
+            max-width: 900px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-gold) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: clamp(1.05rem, 2vw, 1.25rem);
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 1.5rem auto 2.5rem;
+            line-height: 1.7;
+        }
+        .hero-ctas {
+            display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;
+        }
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.6rem;
+            padding: 0.85rem 2rem; border-radius: 10px;
+            background: var(--accent-red);
+            color: #fff; font-weight: 700; font-size: 1rem;
+            text-decoration: none; border: none; cursor: pointer;
+            transition: all 0.25s;
+            box-shadow: 0 0 30px var(--glow-red);
+        }
+        .btn-primary:hover { filter: brightness(1.15); transform: translateY(-2px); box-shadow: 0 0 40px var(--glow-red); }
+        .btn-secondary {
+            display: inline-flex; align-items: center; gap: 0.6rem;
+            padding: 0.85rem 2rem; border-radius: 10px;
+            background: var(--bg-surface-2);
+            color: var(--text-primary); font-weight: 600; font-size: 1rem;
+            text-decoration: none; border: 1px solid var(--border-hover);
+            cursor: pointer; transition: all 0.25s;
+        }
+        .btn-secondary:hover { background: var(--bg-surface-3); border-color: rgba(255,255,255,0.2); }
+
+        /* ─── TERMINAL ────────────── */
+        .terminal-window {
+            max-width: 720px; width: 100%; margin: 3rem auto 0;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hover);
+            border-radius: 12px; overflow: hidden;
+            box-shadow: 0 20px 80px rgba(0,0,0,0.5);
+            position: relative; z-index: 2;
+        }
+        .terminal-bar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 16px;
+            background: var(--bg-surface-2);
+            border-bottom: 1px solid var(--border);
+        }
+        .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .terminal-dot.red { background: #ff5f57; }
+        .terminal-dot.yellow { background: #febc2e; }
+        .terminal-dot.green { background: #28c840; }
+        .terminal-title {
+            flex: 1; text-align: center;
+            font-size: 0.75rem; color: var(--text-dim);
+        }
+        .terminal-body {
+            padding: 1.25rem 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem; line-height: 1.8;
+            min-height: 220px;
+        }
+        .terminal-body .prompt { color: var(--accent-green); }
+        .terminal-body .cmd { color: var(--text-primary); }
+        .terminal-body .output { color: var(--text-secondary); }
+        .terminal-body .highlight { color: var(--accent-amber); }
+        .terminal-body .success { color: var(--accent-green); }
+        .terminal-body .accent { color: var(--accent-red); }
+
+        /* ─── SECTION ─────────────── */
+        section {
+            padding: 6rem 2rem;
+            max-width: 1100px; margin: 0 auto;
+        }
+        .section-label {
+            color: var(--accent-red); font-size: 0.8rem;
+            font-weight: 700; letter-spacing: 0.1em;
+            text-transform: uppercase; margin-bottom: 1rem;
+        }
+        .section-title {
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: 800; letter-spacing: -0.03em;
+            line-height: 1.15; margin-bottom: 1.5rem;
+        }
+        .section-subtitle {
+            font-size: 1.1rem; color: var(--text-secondary);
+            max-width: 650px; line-height: 1.7;
+        }
+
+        /* ─── PROBLEM ─────────────── */
+        .problem-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem; margin-top: 3rem;
+        }
+        .problem-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 14px; padding: 2rem;
+            transition: all 0.3s;
+        }
+        .problem-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        .problem-icon {
+            font-size: 2rem; margin-bottom: 1rem;
+        }
+        .problem-card h3 {
+            font-size: 1.15rem; font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+        .problem-card p {
+            color: var(--text-secondary); font-size: 0.93rem;
+            line-height: 1.65;
+        }
+
+        /* ─── STACK ───────────────── */
+        .stack-diagram {
+            margin: 3rem auto; max-width: 600px;
+        }
+        .stack-row {
+            display: flex; align-items: center; gap: 1rem;
+            padding: 1.1rem 1.5rem;
+            border: 1px solid var(--border);
+            margin-bottom: -1px;
+            transition: all 0.3s;
+        }
+        .stack-row:first-child { border-radius: 12px 12px 0 0; }
+        .stack-row:last-child { border-radius: 0 0 12px 12px; }
+        .stack-row.active {
+            background: linear-gradient(135deg, rgba(230, 57, 70, 0.08), rgba(242, 169, 59, 0.05));
+            border-color: rgba(230, 57, 70, 0.3);
+            position: relative; z-index: 1;
+        }
+        .stack-label {
+            flex: 1; font-weight: 600; font-size: 0.95rem;
+        }
+        .stack-example {
+            color: var(--text-dim); font-size: 0.8rem;
+        }
+        .stack-badge {
+            background: var(--accent-red); color: #fff;
+            font-size: 0.65rem; font-weight: 700;
+            padding: 0.25rem 0.6rem; border-radius: 4px;
+            letter-spacing: 0.06em;
+        }
+
+        /* ─── FEATURES ────────────── */
+        .features-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem; margin-top: 3rem;
+        }
+        .feature-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 14px; padding: 2rem;
+            transition: all 0.3s;
+        }
+        .feature-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-3px);
+        }
+        .feature-cmd {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem; font-weight: 600;
+            color: var(--accent-amber);
+            background: rgba(242, 169, 59, 0.1);
+            padding: 0.3rem 0.7rem; border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+        .feature-card h3 {
+            font-size: 1.15rem; font-weight: 700;
+            margin-bottom: 0.6rem;
+        }
+        .feature-card p {
+            color: var(--text-secondary); font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        /* ─── PRICING ─────────────── */
+        .pricing-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem; margin-top: 3rem;
+        }
+        .price-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 16px; padding: 2rem;
+            transition: all 0.3s;
+            display: flex; flex-direction: column;
+        }
+        .price-card.featured {
+            border-color: rgba(230, 57, 70, 0.4);
+            box-shadow: 0 0 40px var(--glow-red);
+            position: relative;
+        }
+        .price-card.featured::before {
+            content: 'MOST POPULAR';
+            position: absolute; top: -12px; right: 20px;
+            background: var(--accent-red); color: #fff;
+            font-size: 0.65rem; font-weight: 700;
+            padding: 0.3rem 0.8rem; border-radius: 4px;
+            letter-spacing: 0.08em;
+        }
+        .price-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-3px);
+        }
+        .price-name {
+            font-size: 0.85rem; color: var(--text-dim);
+            font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.08em; margin-bottom: 0.5rem;
+        }
+        .price-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.5rem; }
+        .price-amount {
+            font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em;
+        }
+        .price-amount span {
+            font-size: 1rem; font-weight: 500; color: var(--text-secondary);
+        }
+        .price-desc {
+            color: var(--text-secondary); font-size: 0.88rem;
+            margin: 0.75rem 0 1.5rem; line-height: 1.5;
+        }
+        .price-features {
+            list-style: none; margin-bottom: 2rem; flex: 1;
+        }
+        .price-features li {
+            padding: 0.4rem 0; font-size: 0.88rem;
+            color: var(--text-secondary);
+            display: flex; align-items: flex-start; gap: 0.6rem;
+        }
+        .price-features li::before {
+            content: '✓'; color: var(--accent-green);
+            font-weight: 700; flex-shrink: 0;
+        }
+        .price-btn {
+            display: block; text-align: center;
+            padding: 0.75rem; border-radius: 10px;
+            font-weight: 700; font-size: 0.9rem;
+            text-decoration: none; transition: all 0.2s;
+            cursor: pointer;
+        }
+        .price-btn.primary {
+            background: var(--accent-red); color: #fff; border: none;
+        }
+        .price-btn.primary:hover { filter: brightness(1.15); }
+        .price-btn.secondary {
+            background: transparent; color: var(--text-primary);
+            border: 1px solid var(--border-hover);
+        }
+        .price-btn.secondary:hover { background: var(--bg-surface-2); }
+
+        /* ─── AGENT LOOP ──────────── */
+        .loop-diagram {
+            display: flex; align-items: center; justify-content: center;
+            gap: 0.5rem; flex-wrap: wrap;
+            margin: 3rem auto; max-width: 800px;
+        }
+        .loop-step {
+            background: var(--bg-surface-2);
+            border: 1px solid var(--border);
+            border-radius: 10px; padding: 1rem 1.5rem;
+            text-align: center; min-width: 140px;
+            transition: all 0.3s;
+        }
+        .loop-step:hover { border-color: var(--accent-amber); }
+        .loop-step .icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+        .loop-step .label { font-size: 0.8rem; font-weight: 600; }
+        .loop-arrow { color: var(--text-dim); font-size: 1.2rem; }
+
+        /* ─── IDE LOGOS ────────────── */
+        .ide-row {
+            display: flex; align-items: center; justify-content: center;
+            gap: 3rem; flex-wrap: wrap; margin-top: 3rem;
+            opacity: 0.5;
+        }
+        .ide-logo {
+            font-size: 0.9rem; font-weight: 600;
+            color: var(--text-secondary);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+
+        /* ─── CTA ─────────────────── */
+        .cta-section {
+            text-align: center; padding: 6rem 2rem 8rem;
+            position: relative;
+        }
+        .cta-section::before {
+            content: ''; position: absolute;
+            bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 600px; height: 400px;
+            background: radial-gradient(ellipse, var(--glow-red), transparent 70%);
+            pointer-events: none;
+        }
+        .cta-section h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: 900; letter-spacing: -0.03em;
+            margin-bottom: 1rem;
+        }
+        .cta-section p {
+            color: var(--text-secondary); font-size: 1.1rem;
+            margin-bottom: 2.5rem; max-width: 500px; margin-left: auto; margin-right: auto;
+        }
+        .cta-install {
+            display: inline-flex; align-items: center; gap: 1rem;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hover);
+            border-radius: 12px; padding: 1rem 2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem; color: var(--text-primary);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .cta-install:hover { border-color: var(--accent-amber); }
+        .cta-install .copy-hint {
+            color: var(--text-dim); font-size: 0.75rem;
+        }
+
+        /* ─── FOOTER ──────────────── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 3rem 2rem;
+            text-align: center; color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--text-secondary); text-decoration: none; }
+        footer a:hover { color: var(--text-primary); }
+
+        /* ─── DIVIDER ─────────────── */
+        .divider {
+            border: none; border-top: 1px solid var(--border);
+            margin: 0;
+        }
+
+        /* ─── RESPONSIVE ──────────── */
+        @media (max-width: 768px) {
+            nav { padding: 0.75rem 1rem; }
+            .nav-links a:not(.nav-cta) { display: none; }
+            section { padding: 4rem 1.5rem; }
+            .hero { padding: 6rem 1.5rem 3rem; }
+            .terminal-body { font-size: 0.72rem; padding: 1rem; }
+            .pricing-grid { grid-template-columns: 1fr; }
+            .loop-diagram { flex-direction: column; }
+            .loop-arrow { transform: rotate(90deg); }
+        }
+
+        /* ─── ANIMATIONS ──────────── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-in {
+            opacity: 0; transform: translateY(30px);
+            transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .animate-in.visible {
+            opacity: 1; transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- NAV -->
+    <nav>
+        <a href="#" class="nav-brand">
+            <span class="nav-torii">⛩</span> BushidoOS
+        </a>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#pricing">Pricing</a>
+            <a href="https://github.com/bushidoos" target="_blank">GitHub</a>
+            <a href="#get-started" class="nav-cta">Get Started</a>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-badge">
+            <span>⛩</span> Open Source — v0.1.0
+        </div>
+        <h1>The Enforcement Layer Between Intent and Execution</h1>
+        <p>AI writes code faster than ever. BushidoOS makes sure it's the <em>right</em> code. A living PRD that audits your codebase, cascades requirement changes, and keeps every coding agent aligned.</p>
+        <div class="hero-ctas">
+            <a href="#get-started" class="btn-primary">
+                <span>⛩</span> Get Started Free
+            </a>
+            <a href="#how-it-works" class="btn-secondary">
+                See How It Works →
+            </a>
+        </div>
+
+        <!-- Terminal Demo -->
+        <div class="terminal-window">
+            <div class="terminal-bar">
+                <div class="terminal-dot red"></div>
+                <div class="terminal-dot yellow"></div>
+                <div class="terminal-dot green"></div>
+                <span class="terminal-title">Terminal — bushido</span>
+            </div>
+            <div class="terminal-body" id="terminal-demo">
+                <div><span class="prompt">$</span> <span class="cmd">bushido kickstart</span> <span class="highlight">"AI savings app for Gen-Z"</span></div>
+                <div class="output">  ✔ Market Analysis complete</div>
+                <div class="output">  ✔ User Persona generated</div>
+                <div class="output">  ✔ Solution Concept designed</div>
+                <div class="output">  ✔ Product Spec created — <span class="highlight">3 features, 12 acceptance criteria</span></div>
+                <div class="output">  ✔ Execution Roadmap planned</div>
+                <div class="output">  <span class="success">✅ Bundle saved: spec.json, strategy.md, .cursorrules</span></div>
+                <div style="margin-top: 0.75rem"><span class="prompt">$</span> <span class="cmd">bushido audit</span></div>
+                <div class="output">  Scanning 47 source files...</div>
+                <div class="output">  <span class="success">Score: 100/100</span> — <span class="highlight">Fully aligned with spec v1.1.0</span></div>
+                <div style="margin-top: 0.75rem"><span class="prompt">$</span> <span class="cmd">bushido change</span> <span class="highlight">"Add social savings feature"</span></div>
+                <div class="output">  ✔ Impact: <span class="accent">addition</span> — 1 new feature, 6 cascade actions</div>
+                <div class="output">  ✔ Spec updated: v1.1.0 → <span class="success">v1.2.0</span></div>
+                <div class="output">  <span class="success">✅ .cursorrules synced to all IDEs</span></div>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- PROBLEM -->
+    <section id="problem" class="animate-in">
+        <div class="section-label">The Problem</div>
+        <h2 class="section-title">AI Can Write Code.<br>Nobody Checks If It's Right.</h2>
+        <p class="section-subtitle">Every team using AI coding agents faces the same invisible crisis. The spec goes stale. The code drifts. Nobody notices until it's too late.</p>
+        
+        <div class="problem-grid">
+            <div class="problem-card">
+                <div class="problem-icon">📝</div>
+                <h3>Specs Go Stale</h3>
+                <p>Requirements live in Notion docs that nobody updates. The PM says one thing, the agent builds another. Three weeks later: "this isn't what we asked for."</p>
+            </div>
+            <div class="problem-card">
+                <div class="problem-icon">🌪️</div>
+                <h3>Changes Cascade Silently</h3>
+                <p>"Add social login" touches auth, database, API, UI, and tests. But the spec doesn't update. The other 3 developers keep building against the old version.</p>
+            </div>
+            <div class="problem-card">
+                <div class="problem-icon">🤖</div>
+                <h3>Agents Hallucinate Scope</h3>
+                <p>AI coding agents are eager to help. Too eager. They add features that were never specified, remove constraints they don't understand, and nobody audits the output.</p>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- WHERE WE FIT -->
+    <section id="how-it-works" class="animate-in">
+        <div class="section-label">Where We Fit</div>
+        <h2 class="section-title">We Don't Write Code.<br>We Make Sure The Right Code Gets Written.</h2>
+        <p class="section-subtitle">BushidoOS sits between the PM and the coding agent — the enforcement layer that turns specs into living, auditable contracts.</p>
+
+        <div class="stack-diagram">
+            <div class="stack-row">
+                <div class="stack-label">Project Management</div>
+                <div class="stack-example">Linear, Jira, Notion</div>
+            </div>
+            <div class="stack-row active">
+                <div class="stack-label">Spec Orchestration</div>
+                <span class="stack-badge">WE ARE HERE</span>
+            </div>
+            <div class="stack-row">
+                <div class="stack-label">Code Generation</div>
+                <div class="stack-example">Cursor, Copilot, Claude</div>
+            </div>
+            <div class="stack-row">
+                <div class="stack-label">Code Execution</div>
+                <div class="stack-example">OpenClaw, Devin, Agents</div>
+            </div>
+        </div>
+
+        <div class="loop-diagram">
+            <div class="loop-step">
+                <div class="icon">👤</div>
+                <div class="label">You</div>
+            </div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-step">
+                <div class="icon">⛩</div>
+                <div class="label">BushidoOS</div>
+            </div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-step">
+                <div class="icon">🤖</div>
+                <div class="label">Coding Agent</div>
+            </div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-step">
+                <div class="icon">🔍</div>
+                <div class="label">Foreman Audit</div>
+            </div>
+            <span class="loop-arrow">→</span>
+            <div class="loop-step">
+                <div class="icon">✅</div>
+                <div class="label">Verified</div>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- FEATURES -->
+    <section id="features" class="animate-in">
+        <div class="section-label">Capabilities</div>
+        <h2 class="section-title">11 Commands. One Living PRD.</h2>
+        <p class="section-subtitle">Everything runs from the terminal. No browser tabs. No context switching. Your spec stays alive in your IDE.</p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-cmd">bushido kickstart</div>
+                <h3>Idea → Spec in Minutes</h3>
+                <p>Deep research, user personas, market analysis, adversarial roast, and a full product spec — generated from a single prompt.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-cmd">bushido audit</div>
+                <h3>Foreman Alignment Audit</h3>
+                <p>Scans your real codebase against the spec. Returns a score (0-100) and a punchlist of violations with severity levels.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-cmd">bushido change</div>
+                <h3>Impact Cascade Engine</h3>
+                <p>Push a requirement change. AI analyzes the blast radius, versions the spec, identifies downstream artifacts, and updates every agent's context.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-cmd">bushido chat</div>
+                <h3>Talk to Your PM</h3>
+                <p>Interactive conversation with your AI Product Manager. It knows your spec, your strategy, your recent changes, and your audit status.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-cmd">bushido push / pull</div>
+                <h3>Cloud Sync</h3>
+                <p>Push your .bushido/ artifacts to the cloud. Pull them on any machine. Conflict detection with hash manifests keeps everything in sync.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-cmd">.cursorrules</div>
+                <h3>Auto-Generated IDE Rules</h3>
+                <p>Every spec change auto-generates `.cursorrules` that tell your coding agent exactly what to build — and what not to touch.</p>
+            </div>
+        </div>
+
+        <!-- IDE compatibility -->
+        <div class="ide-row">
+            <div class="ide-logo">🔵 VS Code</div>
+            <div class="ide-logo">⚡ Cursor</div>
+            <div class="ide-logo">🌊 Windsurf</div>
+            <div class="ide-logo">🟡 Claude Desktop</div>
+            <div class="ide-logo">🟢 Any MCP Agent</div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- PRICING -->
+    <section id="pricing" class="animate-in">
+        <div class="section-label">Pricing</div>
+        <h2 class="section-title">Start Free. Scale When Ready.</h2>
+        <p class="section-subtitle">The CLI is free and open source. Pay when you want convenience, collaboration, or enterprise features.</p>
+
+        <div class="pricing-grid">
+            <div class="price-card">
+                <div class="price-name">Solo Samurai</div>
+                <div class="price-title">Free</div>
+                <div class="price-amount">$0</div>
+                <p class="price-desc">Full CLI for individual developers. Bring your own API key.</p>
+                <ul class="price-features">
+                    <li>All 11 CLI commands</li>
+                    <li>MCP server for IDE integration</li>
+                    <li>.cursorrules auto-generation</li>
+                    <li>Foreman alignment audit</li>
+                    <li>BYOK — use your own API key</li>
+                    <li>1 project</li>
+                </ul>
+                <a href="#get-started" class="price-btn secondary">Get Started</a>
+            </div>
+
+            <div class="price-card featured">
+                <div class="price-name">Dojo</div>
+                <div class="price-title">Pro</div>
+                <div class="price-amount">$19<span>/month</span></div>
+                <p class="price-desc">Hosted API and cloud sync. No API keys needed.</p>
+                <ul class="price-features">
+                    <li>Everything in Free</li>
+                    <li>Unlimited projects</li>
+                    <li>Hosted AI — no API keys needed</li>
+                    <li>Cloud sync (push/pull)</li>
+                    <li>Conversation history sync</li>
+                    <li>Priority model access</li>
+                </ul>
+                <a href="#get-started" class="price-btn primary">Start Pro Trial</a>
+            </div>
+
+            <div class="price-card">
+                <div class="price-name">Clan</div>
+                <div class="price-title">Team</div>
+                <div class="price-amount">$29<span>/user/mo</span></div>
+                <p class="price-desc">Shared workspace for teams building together.</p>
+                <ul class="price-features">
+                    <li>Everything in Pro</li>
+                    <li>Shared project workspace</li>
+                    <li>Role-based access (PM, Dev, Viewer)</li>
+                    <li>Spec change notifications</li>
+                    <li>Team audit dashboard</li>
+                    <li>Slack/Discord integration</li>
+                </ul>
+                <a href="#get-started" class="price-btn secondary">Contact Sales</a>
+            </div>
+
+            <div class="price-card">
+                <div class="price-name">Shogunate</div>
+                <div class="price-title">Enterprise</div>
+                <div class="price-amount">Custom</div>
+                <p class="price-desc">SSO, compliance, and dedicated support.</p>
+                <ul class="price-features">
+                    <li>Everything in Team</li>
+                    <li>SSO/SAML</li>
+                    <li>Audit logs & compliance exports</li>
+                    <li>Private LLM deployment</li>
+                    <li>Custom MCP integrations</li>
+                    <li>Dedicated success manager</li>
+                </ul>
+                <a href="#get-started" class="price-btn secondary">Contact Sales</a>
+            </div>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- CTA -->
+    <section id="get-started" class="cta-section animate-in">
+        <h2>Start Building With Honor</h2>
+        <p>One command to install. Zero config. Your spec is alive in 60 seconds.</p>
+        
+        <div class="cta-install" onclick="navigator.clipboard.writeText('npx bushido-os kickstart'); this.querySelector('.copy-hint').textContent = 'Copied!'">
+            <span><span class="prompt" style="color: var(--accent-green)">$</span> npx bushido-os kickstart</span>
+            <span class="copy-hint">Click to copy</span>
+        </div>
+
+        <div style="margin-top: 2rem;">
+            <a href="https://github.com/bushidoos" target="_blank" class="btn-secondary">
+                ⭐ Star on GitHub
+            </a>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <p style="margin-bottom: 0.75rem;">
+            <a href="#" class="nav-brand" style="display: inline-flex; font-size: 1rem;">
+                <span class="nav-torii">⛩</span> BushidoOS
+            </a>
+        </p>
+        <p>The enforcement layer between intent and execution.</p>
+        <p style="margin-top: 0.75rem;">
+            <a href="https://github.com/bushidoos">GitHub</a> · 
+            <a href="#">Docs</a> · 
+            <a href="#">Discord</a> · 
+            <a href="#">Twitter</a>
+        </p>
+        <p style="margin-top: 1.5rem; font-size: 0.75rem;">© 2026 BushidoOS. Built with honor.</p>
+    </footer>
+
+    <!-- Scroll animation -->
+    <script>
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.animate-in').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>

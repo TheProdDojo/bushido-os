@@ -1,0 +1,5 @@
+{
+  "name": "BushidoOS - Kickstart Draft",
+  "description": "A Zero-to-One product strategy generator that creates draft artifacts (Market Analysis, Persona, Solution, Roadmap) using Gemini, enforcing a validation workflow to prevent hallucination cascades.",
+  "requestFramePermissions": []
+}

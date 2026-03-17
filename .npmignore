@@ -1,0 +1,40 @@
+# Exclude web app (React/Vite) — only publish CLI
+App.tsx
+index.tsx
+index.html
+index.css
+components/
+hooks/
+landing/
+api/
+tests/
+coverage/
+
+# Exclude IDE/editor configs
+.cursor/
+.vscode/
+.windsurf/
+.vercel/
+
+# Exclude user artifacts
+.bushido/
+.env.local
+.env
+
+# Exclude docs (except README)
+bushido_os_orchestrator_architecture.md
+metadata.json
+
+# Exclude dev configs
+vite.config.ts
+vitest.config.ts
+tsup.config.ts
+tsconfig.json
+.nvmrc
+.gitignore
+
+# Exclude test files and stale backups
+**/*.test.ts
+**/*.test.js
+**/*.old
+**/*.local

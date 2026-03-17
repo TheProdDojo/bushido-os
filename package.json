@@ -1,0 +1,85 @@
+{
+  "name": "bushido-os",
+  "version": "0.1.0",
+  "description": "AI Development Orchestrator — The enforcement layer between intent and execution. Living PRD, real-time audit, impact cascade.",
+  "type": "module",
+  "license": "MIT",
+  "author": "BushidoOS",
+  "homepage": "https://bushidoos.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bushidoos/bushido-os"
+  },
+  "keywords": [
+    "ai",
+    "pm",
+    "product-manager",
+    "spec",
+    "prd",
+    "audit",
+    "cli",
+    "mcp",
+    "development-orchestrator",
+    "code-audit",
+    "bushido"
+  ],
+  "bin": {
+    "bushido": "./bin/bushido.mjs",
+    "bushido-os": "./bin/bushido.mjs"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "scripts/",
+    "services/",
+    "types/",
+    "types.ts",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:cli": "tsup",
+    "preview": "vite preview",
+    "sync": "node scripts/sync-server.js",
+    "mcp": "node scripts/mcp-server.js",
+    "bushido": "tsx scripts/cli.ts",
+    "bushido:status": "tsx scripts/cli.ts status",
+    "bushido:kickstart": "tsx scripts/cli.ts kickstart",
+    "bushido:audit": "tsx scripts/cli.ts audit",
+    "prepublishOnly": "npm run build:cli",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^3.0.20",
+    "@ai-sdk/openai": "^3.0.25",
+    "@google/genai": "^1.42.0",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@supabase/supabase-js": "^2.94.0",
+    "@tavily/core": "^0.7.1",
+    "ai": "^6.0.69",
+    "body-parser": "^2.2.2",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "ora": "^9.3.0",
+    "tsx": "^4.21.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vercel/node": "^5.5.28",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

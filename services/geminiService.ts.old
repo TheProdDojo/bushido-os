@@ -1,0 +1,758 @@
+import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { StageType, Artifact, STAGE_CONFIG, Source, ChatMessage } from "../types";
+
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+const FAST_MODEL = 'gemini-3-flash-preview';
+const COMPLEX_MODEL = 'gemini-3-pro-preview';
+const IMAGE_MODEL_NAME = 'gemini-2.5-flash-image';
+const AUDIO_MODEL_NAME = 'gemini-2.5-flash-preview-tts';
+
+interface StreamUpdate {
+  content: string;
+  title?: string;
+  isComplete: boolean;
+  sources?: Source[];
+  thought?: string;
+}
+
+export interface DeepResearchUpdate {
+    type: 'plan' | 'thought' | 'content' | 'source';
+    data: string | Source[];
+}
+
+/**
+ * Performs deep "Zero-to-One" research with structured streaming.
+ * Uses <tags> to separate internal monologue from final output.
+ */
+export async function* performDeepResearchStream(idea: string): AsyncGenerator<DeepResearchUpdate, void, unknown> {
+    const prompt = `
+    You are an autonomous Deep Research Agent.
+    
+    TOPIC: "${idea}"
+    
+    GOAL: Produce a high-quality, data-backed Research Brief.
+    
+    PROTOCOL:
+    1. PLAN: First, analyze the request and list 4-6 specific research steps (e.g., "Investigate competitor pricing", "Check Reddit for user complaints"). 
+       Wrap this section in <plan>...</plan> tags. Format each step as a bullet point.
+    
+    2. EXECUTE: Conduct the research. For every major thought, search query, or analysis step, output a log message wrapped in <thought>...</thought> tags.
+       Example: <thought>Searching for 'VS Code vs Cursor market share'...</thought>
+       
+    3. SYNTHESIZE: Finally, write the structured "Deep Research Brief". 
+       Wrap the final markdown report in <brief>...</brief> tags.
+       The Brief should include:
+        - 🚨 Market Reality Check
+        - ⚔️ Competitor Intel
+        - ⚠️ Technical & Regulatory Risks
+        - 💡 "Unfair Advantage" Opportunities
+    
+    REQUIREMENTS:
+    - Use the googleSearch tool extensively.
+    - Be critical and realistic.
+    `;
+
+    try {
+        const result = await ai.models.generateContentStream({
+            model: COMPLEX_MODEL,
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+                thinkingConfig: { thinkingBudget: 8192 } 
+            }
+        });
+
+        let buffer = "";
+        let collectedSources: Source[] = [];
+        let inBrief = false;
+
+        for await (const chunk of result) {
+            const text = chunk.text || "";
+            
+            // 1. Handle Sources
+            if (chunk.candidates?.[0]?.groundingMetadata?.groundingChunks) {
+                const newSources: Source[] = [];
+                chunk.candidates[0].groundingMetadata.groundingChunks.forEach((c: any) => {
+                    if (c.web?.uri && c.web?.title) {
+                        if (!collectedSources.some(s => s.uri === c.web.uri)) {
+                            const s = { title: c.web.title, uri: c.web.uri };
+                            newSources.push(s);
+                            collectedSources.push(s);
+                        }
+                    }
+                });
+                if (newSources.length > 0) {
+                    yield { type: 'source', data: newSources };
+                }
+            }
+
+            // 2. Buffer processing for Tags
+            buffer += text;
+
+            // Extract <plan>
+            const planMatch = buffer.match(/<plan>([\s\S]*?)<\/plan>/);
+            if (planMatch) {
+                yield { type: 'plan', data: planMatch[1].trim() };
+                buffer = buffer.replace(planMatch[0], ""); // Remove processed plan
+            }
+
+            // Extract <thought>
+            // We use a loop because multiple thoughts might arrive in one chunk
+            let thoughtMatch;
+            while ((thoughtMatch = buffer.match(/<thought>([\s\S]*?)<\/thought>/)) !== null) {
+                yield { type: 'thought', data: thoughtMatch[1].trim() };
+                buffer = buffer.replace(thoughtMatch[0], ""); 
+            }
+
+            // Extract <brief> (Streaming content)
+            // If we find the start tag, we switch mode
+            if (!inBrief && buffer.includes('<brief>')) {
+                inBrief = true;
+                const split = buffer.split('<brief>');
+                buffer = split[1] || ""; // Keep the part after the tag
+            }
+
+            if (inBrief) {
+                // If we hit the end tag, stop
+                if (buffer.includes('</brief>')) {
+                    const content = buffer.split('</brief>')[0];
+                    yield { type: 'content', data: content };
+                    buffer = ""; // Clear
+                } else {
+                    yield { type: 'content', data: buffer };
+                }
+            }
+        }
+
+    } catch (e) {
+        console.error("Deep Research Stream Failed", e);
+        yield { type: 'thought', data: 'Error executing deep research. Falling back...' };
+    }
+}
+
+export async function* generateStageDraftStream(
+  stage: StageType,
+  idea: string,
+  contextArtifacts: Record<StageType, Artifact>,
+  researchBrief?: string // New optional parameter
+): AsyncGenerator<StreamUpdate, void, unknown> {
+  
+  // Build context from previous stages
+  let contextString = "";
+  const stagesOrder = [
+    StageType.MARKET_ANALYSIS, 
+    StageType.USER_PERSONA, 
+    StageType.SOLUTION_CONCEPT, 
+    StageType.PRODUCT_SPEC, 
+    StageType.EXECUTION_ROADMAP
+  ];
+  const currentIndex = stagesOrder.indexOf(stage);
+
+  // If we are at the very beginning (Market Analysis) and have a Research Brief, inject it.
+  if (stage === StageType.MARKET_ANALYSIS && researchBrief) {
+      contextString += `\n\n=== 🧠 DEEP RESEARCH INTELLIGENCE ===\nUse this research to ground your analysis. Do not ignore these findings.\n${researchBrief}\n=====================================\n\n`;
+  }
+
+  // Add context from only upstream stages
+  for (let i = 0; i < currentIndex; i++) {
+      const upstreamType = stagesOrder[i];
+      const upstreamArtifact = contextArtifacts[upstreamType];
+      if (upstreamArtifact && upstreamArtifact.content) {
+          contextString += `\n\n--- COMPLETED ${STAGE_CONFIG[upstreamType].label} ---\nTitle: ${upstreamArtifact.title}\nContent:\n${upstreamArtifact.content}\n`;
+      }
+  }
+
+  let specificRequirements = "";
+  let useSearch = false;
+  let useThinking = true; // Always enable thinking for streaming effect
+  let modelName = FAST_MODEL; 
+
+  if (stage === StageType.MARKET_ANALYSIS) {
+    modelName = COMPLEX_MODEL; // Upgraded to Pro for better synthesis of the Research Brief
+    useSearch = true; // Keep search enabled to double-check
+    specificRequirements = `
+    Use the provided Deep Research Intelligence as your primary source of truth, but verify with Google Search if data feels stale.
+    
+    Structure with these Markdown Headers:
+    ## 1. Problem Validation
+       - Cite 3 specific data points or trends.
+    ## 2. Target User Research
+    ## 3. Market Analysis (TAM/SAM/SOM)
+    ## 4. Competitive Landscape
+       - Create a Markdown Table comparing 3 competitors found in the research (Columns: Competitor, Price Model, Key Feature, Weakness).
+       - Create a Mermaid Quadrant Chart comparing 'Innovation' (x-axis) vs 'Market Reach' (y-axis) for these competitors.
+    `;
+  } else if (stage === StageType.USER_PERSONA) {
+    modelName = FAST_MODEL;
+    useSearch = true;
+    specificRequirements = `
+    Use Google Search to find online communities and discussions.
+
+    Structure with these Markdown Headers:
+    ## 1. Persona Profile (The "Protagonist")
+    ## 2. Empathy Map
+       - Create a Markdown Table with columns: Says, Thinks, Does, Feels.
+    ## 3. Digital Habitats (Where they hang out online)
+    ## 4. User Journey Map (Current State)
+       - Create a Mermaid Journey Diagram detailing their current struggle without our product.
+    ## 5. Key Insights
+    `;
+  } else if (stage === StageType.SOLUTION_CONCEPT) {
+    modelName = COMPLEX_MODEL;
+    useThinking = true; 
+    specificRequirements = `
+    Structure with these Markdown Headers:
+    ## 1. Product Vision (High Concept Pitch)
+    ## 2. Value Proposition Canvas
+    ## 3. Business Model Canvas
+    ## 4. System Architecture
+       - Create a Mermaid Flowchart (TD) showing the high-level system components and data flow.
+    ## 5. SWOT Analysis (Table)
+    `;
+  } else if (stage === StageType.PRODUCT_SPEC) {
+    modelName = COMPLEX_MODEL;
+    useThinking = true; 
+    specificRequirements = `
+    Structure with these Markdown Headers:
+    ## 1. Tech Stack & Packages
+       - Explicitly recommend the frontend framework (e.g., React/Vite), backend (e.g., Node/Python), database (e.g., Supabase/Firebase), and UI library (e.g., Tailwind/Shadcn).
+    ## 2. Core User Flow ("Happy Path")
+       - Create a Mermaid Sequence Diagram showing the user interaction with the system.
+    ## 3. Feature Requirements (MoSCoW Method)
+    ## 4. MVP Prioritization
+       - Create a RICE Scoring Table for the top 5 features.
+    ## 5. Data Model Schema
+    ## 6. API Definition (Key Endpoints)
+    `;
+  } else if (stage === StageType.EXECUTION_ROADMAP) {
+    modelName = COMPLEX_MODEL;
+    useThinking = true; 
+    specificRequirements = `
+    Structure with these Markdown Headers:
+    ## 1. Launch OKRs (Objective & Key Results)
+    ## 2. Roadmap Timeline
+       - Create a Mermaid Gantt Chart for the first 6 months of execution.
+    ## 3. Phased Execution Strategy (Now, Next, Later)
+    ## 4. Risk Assessment
+       - Create a Risk Matrix Table (Risk, Impact, Probability, Mitigation).
+    `;
+  }
+
+  const prompt = `
+    You are a world-class Product Manager assistant using the BushidoOS methodology.
+    
+    PROJECT IDEA: "${idea}"
+
+    EXISTING CONTEXT:
+    ${contextString || "None yet. You are starting from scratch."}
+
+    TASK:
+    Generate the **${STAGE_CONFIG[stage].label}** for this product.
+    Description: ${STAGE_CONFIG[stage].description}
+
+    ${specificRequirements}
+
+    GENERAL REQUIREMENTS:
+    1. Start the response IMMEDIATELY with a Level 1 Markdown Header (# Title) that serves as the document title.
+    2. VISUALS: Use Mermaid.js diagrams where requested. Ensure syntax is correct.
+    3. FORMATTING: Use **bold** for metrics and key terms. Use tables for comparisons. Use > blockquotes for strategic insights.
+    4. TONE: Professional, concise, "No Fluff".
+    5. THOUGHTS: You can output hidden thoughts wrapped in <thought>...</thought> tags to plan your writing or explain search queries.
+       These thoughts will be shown to the user as a "Thinking Process" log but removed from the final document.
+    6. Output pure Markdown (outside of thought tags).
+  `;
+
+  const requestConfig: any = {};
+
+  if (useSearch) {
+      requestConfig.tools = [{ googleSearch: {} }];
+  }
+  
+  if (useThinking) {
+      requestConfig.thinkingConfig = { thinkingBudget: 4096 };
+  }
+
+  const result = await ai.models.generateContentStream({
+    model: modelName,
+    contents: prompt,
+    config: requestConfig
+  });
+
+  let buffer = "";
+  let aggregatedText = "";
+  let extractedTitle = "";
+  const collectedSources: Source[] = [];
+
+  for await (const chunk of result) {
+      const chunkText = chunk.text || "";
+      
+      // Capture grounding metadata if present in this chunk
+      if (chunk.candidates?.[0]?.groundingMetadata?.groundingChunks) {
+          chunk.candidates[0].groundingMetadata.groundingChunks.forEach((c: any) => {
+              if (c.web?.uri && c.web?.title) {
+                  if (!collectedSources.some(s => s.uri === c.web.uri)) {
+                      collectedSources.push({
+                          title: c.web.title,
+                          uri: c.web.uri
+                      });
+                  }
+              }
+          });
+      }
+
+      if (chunkText) {
+          buffer += chunkText;
+
+          // Extract complete thoughts from buffer
+          let thoughtMatch;
+          while ((thoughtMatch = buffer.match(/<thought>([\s\S]*?)<\/thought>/)) !== null) {
+                // Found a thought
+                const thoughtText = thoughtMatch[1].trim();
+                
+                // Content before the thought is valid markdown
+                const beforeIndex = thoughtMatch.index!;
+                if (beforeIndex > 0) {
+                     aggregatedText += buffer.substring(0, beforeIndex);
+                }
+
+                yield { 
+                    content: aggregatedText, 
+                    title: extractedTitle || STAGE_CONFIG[stage].label, 
+                    isComplete: false,
+                    thought: thoughtText
+                };
+                
+                // Remove thought and preceding content from buffer
+                buffer = buffer.substring(beforeIndex + thoughtMatch[0].length);
+          }
+
+          // Buffer Flush Logic:
+          // If buffer contains '<', it might be start of a tag, so wait.
+          // Otherwise flush to aggregatedText.
+          const openIndex = buffer.indexOf('<');
+          if (openIndex === -1) {
+              aggregatedText += buffer;
+              buffer = "";
+          } else if (openIndex > 0) {
+              // Flush up to the <
+              aggregatedText += buffer.substring(0, openIndex);
+              buffer = buffer.substring(openIndex);
+          }
+          
+          // Attempt to extract title from the first line if not found yet
+          if (!extractedTitle) {
+              const match = aggregatedText.match(/^#\s+(.*?)(\n|$)/);
+              if (match) {
+                  extractedTitle = match[1].trim();
+              }
+          }
+
+          yield {
+              content: aggregatedText,
+              title: extractedTitle || STAGE_CONFIG[stage].label,
+              isComplete: false
+          };
+      }
+  }
+
+  // Flush remaining buffer (rare case if stream ends mid-tag or with content)
+  if (buffer) {
+      aggregatedText += buffer.replace(/<thought>[\s\S]*?<\/thought>/g, ''); // Naive strip if malformed
+  }
+
+  yield {
+      content: aggregatedText,
+      title: extractedTitle || STAGE_CONFIG[stage].label,
+      isComplete: true,
+      sources: collectedSources
+  };
+}
+
+export const consultStrategy = async (
+  stage: StageType,
+  currentContent: string,
+  userMessage: string,
+  idea: string
+): Promise<string> => {
+    const prompt = `
+    You are the "Bushido Co-pilot", a helpful product strategy assistant.
+    
+    CONTEXT:
+    Product Idea: "${idea}"
+    Current Artifact: ${STAGE_CONFIG[stage].label}
+    
+    ARTIFACT CONTENT:
+    """
+    ${currentContent.substring(0, 5000)}...
+    """
+    
+    USER QUESTION:
+    "${userMessage}"
+    
+    TASK:
+    Answer the user's question based on the artifact content above.
+    Be concise, helpful, and specific. If the answer isn't in the doc, suggest how they might add it.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: FAST_MODEL,
+        contents: prompt
+    });
+
+    return response.text || "I couldn't analyze the document right now.";
+}
+
+export const refineStageDraft = async (
+  stage: StageType,
+  currentContent: string,
+  userInstruction: string
+): Promise<string> => {
+  const prompt = `
+    You are refining a product strategy artifact.
+    
+    ARTIFACT TYPE: ${STAGE_CONFIG[stage].label}
+    
+    CURRENT CONTENT:
+    """
+    ${currentContent}
+    """
+    
+    USER INSTRUCTION FOR REFINEMENT:
+    "${userInstruction}"
+    
+    TASK:
+    Rewrite the content to incorporate the user's instruction. 
+    Maintain the original markdown structure (including Mermaid diagrams and tables).
+    Return ONLY the new markdown content.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: COMPLEX_MODEL,
+    contents: prompt,
+  });
+
+  return response.text || currentContent;
+};
+
+export const refineSpecificSection = async (
+  sectionTitle: string,
+  sectionContent: string,
+  userInstruction: string,
+  context: string
+): Promise<string> => {
+    const prompt = `
+    You are a specialized editor refining a specific section of a Product Strategy document.
+    
+    PROJECT CONTEXT:
+    ${context.substring(0, 1000)}...
+    
+    SECTION TITLE: "${sectionTitle}"
+    
+    CURRENT SECTION CONTENT:
+    """
+    ${sectionContent}
+    """
+    
+    INSTRUCTION:
+    "${userInstruction}"
+    
+    TASK:
+    Rewrite ONLY this section content. Do not include the title (Header 2).
+    Keep the output formatted as Markdown (lists, tables, etc) appropriate for this section.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: FAST_MODEL,
+        contents: prompt
+    });
+
+    return response.text || sectionContent;
+}
+
+export const auditStageDraft = async (
+  stage: StageType,
+  content: string,
+  idea: string
+): Promise<string> => {
+  const prompt = `
+    You are a cynical, highly experienced Venture Capitalist and Product Leader.
+    
+    PROJECT IDEA: "${idea}"
+    STAGE: ${STAGE_CONFIG[stage].label}
+    
+    CONTENT TO AUDIT:
+    """
+    ${content}
+    """
+    
+    TASK:
+    Provide a brutal but constructive audit of this draft.
+    
+    STRUCTURE:
+    1. **Score**: Give a validation score (0-10) based on specificity and logic.
+    2. **Strengths**: List 2 things done well.
+    3. **Critical Gaps**: List 3 specific things missing or weak.
+    4. **Recommendation**: One concrete action to improve this artifact.
+    
+    Tone: Professional, direct, slightly critical.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: COMPLEX_MODEL, 
+    contents: prompt,
+  });
+
+  return response.text || "Unable to generate audit.";
+};
+
+export const chatWithPersona = async (
+  personaContent: string,
+  chatHistory: { role: 'user' | 'model', text: string }[],
+  userMessage: string
+): Promise<string> => {
+    const systemInstruction = `
+    You are roleplaying as the User Persona described below. 
+    Your goal is to answer the user's questions authentically, based on your demographics, pains, and needs defined in the profile.
+    
+    PERSONA PROFILE:
+    ${personaContent.substring(0, 3000)}
+    `;
+
+    const contents = chatHistory.map(msg => ({
+        role: msg.role,
+        parts: [{ text: msg.text }]
+    }));
+    
+    contents.push({
+        role: 'user',
+        parts: [{ text: userMessage }]
+    });
+
+    const response = await ai.models.generateContent({
+        model: FAST_MODEL,
+        contents: contents,
+        config: {
+            systemInstruction: systemInstruction,
+        }
+    });
+
+    return response.text || "I'm not sure how to answer that.";
+};
+
+export const generatePersonaImage = async (personaContent: string): Promise<string | null> => {
+    const promptRefinement = await ai.models.generateContent({
+        model: FAST_MODEL,
+        contents: `Create a concise image generation prompt (under 40 words) for a realistic, high-quality portrait of the user persona described below.
+        
+        Persona Description:
+        ${personaContent.substring(0, 1500)}`,
+    });
+    
+    const imagePrompt = promptRefinement.text || "A professional portrait of a target user";
+
+    try {
+        const response = await ai.models.generateContent({
+            model: IMAGE_MODEL_NAME,
+            contents: {
+                parts: [{ text: imagePrompt }]
+            },
+            config: {
+                imageConfig: {
+                    aspectRatio: "1:1"
+                }
+            }
+        });
+
+        for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData) {
+                return `data:image/png;base64,${part.inlineData.data}`;
+            }
+        }
+        return null;
+    } catch (e) {
+        console.error("Image generation failed", e);
+        return null;
+    }
+};
+
+export const generateAgentPrompt = async (
+  artifacts: Record<StageType, Artifact>,
+  idea: string,
+  targetAgent: 'replit' | 'cursor' | 'bolt'
+): Promise<string> => {
+    
+    const context = `
+    Product: ${idea}
+    
+    Persona:
+    ${artifacts[StageType.USER_PERSONA].content}
+    
+    Solution:
+    ${artifacts[StageType.SOLUTION_CONCEPT].content}
+    
+    Spec:
+    ${artifacts[StageType.PRODUCT_SPEC].content}
+    `;
+
+    const prompt = `
+    You are a Chief Architect preparing a "Master Prompt" for an AI Coding Agent (${targetAgent === 'replit' ? 'Replit Agent' : targetAgent === 'bolt' ? 'Bolt.new' : 'Cursor/Windsurf Composer'}).
+    
+    GOAL:
+    Create a single, massive, optimized prompt that I can paste into the agent to build the MVP of this product immediately.
+    
+    SOURCE MATERIAL:
+    ${context}
+    
+    REQUIREMENTS FOR THE OUTPUT PROMPT:
+    1. It must start with "Act as a Senior Full Stack Engineer. We are building [Product Name]..."
+    2. It must explicitly state the Tech Stack defined in the source material.
+    3. It must list the Core Features to implement in the first iteration.
+    4. It must define the Folder Structure and Key Components in a tree format.
+    5. It must include a "Step-by-Step Implementation Plan" for the agent to follow.
+    6. **CRITICAL**: Provide the content for the \`README.md\` file as the first step, ensuring it outlines the project clearly.
+    
+    Output ONLY the prompt text, ready to be copied.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: COMPLEX_MODEL,
+        contents: prompt
+    });
+
+    return response.text || "Failed to generate agent prompt.";
+}
+
+export const generateStrategyPodcast = async (
+  idea: string,
+  artifacts: Record<StageType, Artifact>
+): Promise<string | null> => {
+    // 1. Generate the Script
+    let fullContext = `Product Idea: ${idea}\n\n`;
+    Object.values(artifacts).forEach(a => {
+        if (a.content) fullContext += `--- ${STAGE_CONFIG[a.type].label} ---\n${a.content.substring(0, 1000)}\n\n`;
+    });
+
+    const scriptPrompt = `
+    Generate a short, energetic podcast script (approx 200 words) about this product strategy.
+    
+    Characters:
+    - Host (Kore): Visionary, excited.
+    - Guest (Puck): Pragmatic, technical.
+    
+    Format the output EXACTLY like this:
+    Host: [text]
+    Guest: [text]
+    Host: [text]
+    
+    CONTENT TO DISCUSS:
+    ${fullContext.substring(0, 10000)}
+    `;
+
+    try {
+        // Step 1: Generate Script
+        const scriptResponse = await ai.models.generateContent({
+             model: COMPLEX_MODEL,
+             contents: scriptPrompt
+        });
+        const script = scriptResponse.text;
+
+        if (!script) throw new Error("Failed to generate podcast script");
+
+        // Step 2: TTS
+        const audioResponse = await ai.models.generateContent({
+            model: AUDIO_MODEL_NAME,
+            contents: script,
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                    multiSpeakerVoiceConfig: {
+                        speakerVoiceConfigs: [
+                            {
+                                speaker: 'Host',
+                                voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
+                            },
+                            {
+                                speaker: 'Guest',
+                                voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
+                            }
+                        ]
+                    }
+                }
+            }
+        });
+        
+        const audioPart = audioResponse.candidates?.[0]?.content?.parts?.[0];
+        if (audioPart && audioPart.inlineData) {
+            return audioPart.inlineData.data;
+        }
+        return null;
+
+    } catch (e) {
+        console.error("Audio generation failed", e);
+        return null;
+    }
+}
+
+export const regenerateDownstream = async (
+  currentStage: StageType,
+  currentContent: string,
+  downstreamStages: StageType[],
+  idea: string
+): Promise<Record<string, { title: string; content: string }>> => {
+  
+  const prompt = `
+    Context: The user is building a product defined initially as: "${idea}".
+    
+    The user has MANUALLY UPDATED the ${STAGE_CONFIG[currentStage].label}.
+    
+    New Content for ${STAGE_CONFIG[currentStage].label}:
+    """
+    ${currentContent}
+    """
+    
+    Because of this change, the downstream artifacts (${downstreamStages.map(s => STAGE_CONFIG[s].label).join(', ')}) are now stale.
+    
+    Please regenerate the drafts for: ${downstreamStages.map(s => STAGE_CONFIG[s].label).join(', ')}.
+    Ensure logical consistency. 
+    
+    Output JSON keys should be camelCase versions of the stage names (e.g., userPersona, solutionConcept, productSpec, executionRoadmap).
+  `;
+
+  // Dynamic Schema Construction
+  const properties: Record<string, any> = {};
+  const required: string[] = [];
+
+  if (downstreamStages.includes(StageType.USER_PERSONA)) {
+    properties.userPersona = { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } };
+    required.push("userPersona");
+  }
+  if (downstreamStages.includes(StageType.SOLUTION_CONCEPT)) {
+    properties.solutionConcept = { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } };
+    required.push("solutionConcept");
+  }
+  if (downstreamStages.includes(StageType.PRODUCT_SPEC)) {
+    properties.productSpec = { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } };
+    required.push("productSpec");
+  }
+  if (downstreamStages.includes(StageType.EXECUTION_ROADMAP)) {
+    properties.executionRoadmap = { type: Type.OBJECT, properties: { title: { type: Type.STRING }, content: { type: Type.STRING } } };
+    required.push("executionRoadmap");
+  }
+
+  const response = await ai.models.generateContent({
+    model: FAST_MODEL,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: properties,
+        required: required
+      }
+    }
+  });
+
+   if (!response.text) throw new Error("No response from Gemini");
+   return JSON.parse(response.text);
+}

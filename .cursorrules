@@ -1,0 +1,23 @@
+# BushidoOS Generated Rules for Cursor
+# DO NOT EDIT MANUALLY - This file is auto-synced from the Orchestrator.
+# Updated: 2026-03-17T12:51:48.996Z | Change: "Add a social savings feature where users can create group savings goals with friends"
+
+# 1. STRATEGIC CONTEXT
+You are working on "Savings Application Product Specification".
+Before writing any code, you MUST read:
+- .bushido/strategy.md (High-level goals)
+- .bushido/spec.json (Strict constraints)
+
+# 2. BEHAVIORAL RULES
+- **No Hallucinations**: Only implement features listed in 'spec.json'.
+- **Atomic Commits**: Group changes by feature ID.
+- **Design System**: Use existing components before creating new ones.
+
+# 3. RECENT CHANGE
+Change: "Add a social savings feature where users can create group savings goals with friends"
+Type: addition
+Affected: F003
+
+# 4. CRITICAL INSTRUCTIONS
+If you are unsure about a requirement, STOP and ask the user to update the Spec in BushidoOS.
+Do not make assumptions about business logic.
